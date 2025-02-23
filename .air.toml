@@ -1,0 +1,15 @@
+# .air.toml
+
+# 워킹 디렉토리 설정
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o tmp/main ."
+bin = "tmp/main"
+include_ext = ["go", "tpl", "tmpl", "html"]
+exclude_dir = ["tmp", "vendor", "node_modules","test"]
+exclude_file = ["air.toml"]
+
+[log]
+time = true

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket 채팅</title>
+</head>
+<body>
+<h2>실시간 채팅</h2>
+<div id="chat-box" style="border: 1px solid black; height: 300px; overflow-y: scroll;"></div>
+<div id="user-list-box" style="border: 1px solid black; height: 100px; overflow-y: scroll;"></div>
+<input type="text" id="message" placeholder="메시지를 입력하세요">
+<button onclick="sendMessage()">전송</button>
+
+<script>
+    const socket = new WebSocket("ws://localhost:8080/ws");
+
+    let nickname=""
+
+    socket.onopen = () =>{
+        nickname = prompt("닉네임을 입력하세오:")
+        socket.send(JSON.stringify({nickname}))
+    }
+
+    socket.onmessage = (event) => {
+        console.log(event)
+        // Message : nickname / text    구조체
+        const message = JSON.parse(event.data);
+
+        const chatBox = document.getElementById("chat-box");
+        const userListBox = document.getElementById("user-list-box")
+
+        switch (message.type){
+            case 'system':
+                chatBox.innerHTML += `<p><strong>${message.text}</strong></p>`;
+                break
+
+            case 'users':
+                console.log(message.userList)
+                userListBox.innerHTML = '';
+                for (const user of message.userList) {
+                    userListBox.innerHTML += `<p>${user}</p>`;
+                }
+                break;
+
+            default:
+                chatBox.innerHTML += `<p><strong>${message.nickname}</strong>: ${message.text}</p>`;
+                break;
+        }
+        chatBox.scrollTop = chatBox.scrollHeight; // 스크롤을 최신 메시지로 이동
+    };
+
+    function sendMessage() {
+        const messageInput = document.getElementById("message");
+        const text = messageInput.value.trim();
+        if(text==="")return;
+
+        socket.send(JSON.stringify({text}));
+        messageInput.value = "";
+    }
+
+    document.getElementById("message").addEventListener("keydown", function(e){
+        if (e.key==="Enter"){
+            sendMessage();
+        }
+    })
+</script>
+</body>
+</html>
