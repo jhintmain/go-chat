@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>WebSocket 채팅</title>
-    <script type="text/javascript" src="//code.jquery.com/jquery.min.js"></script>
 </head>
 <body>
 <h2>실시간 채팅</h2>
@@ -22,7 +21,7 @@
     }
 
     socket.onmessage = (event) => {
-        // console.log(event)
+        console.log(event)
         // Message : nickname / text    구조체
         const message = JSON.parse(event.data);
 

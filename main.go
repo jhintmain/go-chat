@@ -1,150 +1,123 @@
 package main
 
 import (
-	"fmt"
 	"github.com/gorilla/websocket"
+	"log"
 	"net/http"
 	"sync"
 )
 
-type Type string
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
-const (
-	MESSAGE Type = "message"
-	SYSTEM  Type = "system"
-	USERS   Type = "users"
-)
+var room = map[string]*Room{
+	"all": {
+		clients:   make(map[*Client]bool),
+		broadcast: make(chan Message),
+	},
+}
+var roomMutex sync.Mutex
+
+type Room struct {
+	clients   map[*Client]bool
+	broadcast chan Message
+	mutex     sync.Mutex
+}
 
 type Client struct {
-	conn     *websocket.Conn
+	conn *websocket.Conn
+	send chan Message
+	room string
+}
+
+type Message struct {
+	nickname string
+	text     string
+}
+
+type ConInfo struct {
+	room     string
 	nickname string
 }
-type Message struct {
-	Type     Type     `json:"type"`
-	NickName string   `json:"nickname"`
-	Text     string   `json:"text"`
-	UserList []string `json:"userList,omitempty"`
-}
 
-func (m *Message) ToSystemMessage(div string) *Message {
-	convertMsg := Message{
-		Type:     SYSTEM,
-		NickName: m.NickName,
-	}
-
-	switch div {
-	case "join":
-		convertMsg.Text = fmt.Sprintf("%s 님이 입장하셨습니다.", m.NickName)
-		break
-	case "leave":
-		convertMsg.Text = fmt.Sprintf("%s 님이 떠났습니다.", m.NickName)
-		break
-	}
-	return &convertMsg
-}
-
-var (
-	//Request > Websocket
-	upgrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-	nicknames = make(map[string]bool)
-	// 클라이언드 목록 생성
-	clients = make(map[*Client]bool)
-	// 메세지 체널 생성
-	broadcast = make(chan Message)
-	mutex     = sync.Mutex{}
-)
-
-// Websocket connection
-func handleConnection(w http.ResponseWriter, r *http.Request) {
+func handleChatRoom(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Println("Web socket Upgrade fail", err)
-		return
+		log.Println("upgrader.Upgrade err:", err)
 	}
-
 	defer conn.Close()
 
-	var msg Message
-	if err := conn.ReadJSON(&msg); err != nil {
-		fmt.Println("Web socket Read Message fail", err)
-		return
+	var conInfo ConInfo
+	if err := conn.ReadJSON(conInfo); err != nil {
+		log.Println("conn.ReadJSON err:", err)
 	}
 
-	client := &Client{conn: conn, nickname: msg.NickName}
+	client := &Client{
+		conn: conn,
+		send: make(chan Message),
+		room: conInfo.room,
+	}
 
-	mutex.Lock()
-	clients[client] = true
-	nicknames[msg.NickName] = true
-	broadcast <- *msg.ToSystemMessage("join")
-	mutex.Unlock()
+	chatRoom := getRoom(conInfo.room)
 
-	sendUserList()
+	chatRoom.mutex.Lock()
+	chatRoom.clients[client] = true
+	chatRoom.mutex.Unlock()
+
+	go client.writePump()
+	client.readPump(chatRoom)
+
+}
+
+func (c *Client) writePump() {
+	for msg := range c.send {
+		if err := c.conn.WriteJSON(msg); err != nil {
+			log.Println("c.conn.WriteJSON err:", err)
+		}
+	}
+}
+func (c *Client) readPump(chatRoom *Room) {
+	defer func() {
+		chatRoom.mutex.Lock()
+		delete(chatRoom.clients, c)
+		chatRoom.mutex.Unlock()
+		c.conn.Close()
+	}()
 
 	for {
-		if err := conn.ReadJSON(&msg); err != nil {
-			fmt.Println("Web socket Read Message fail", err)
+		var msg Message
+		if err := c.conn.ReadJSON(&msg); err != nil {
+			log.Println("c.conn.ReadJSON err:", err)
 			break
 		}
-		msg.NickName = client.nickname
-		msg.Type = MESSAGE
-		broadcast <- msg
+
+		chatRoom.broadcast <- msg
 	}
-
-	mutex.Lock()
-	delete(clients, client)
-	delete(nicknames, client.nickname)
-	mutex.Unlock()
-
-	broadcast <- *msg.ToSystemMessage("leave")
 }
 
-// broadcast message
-func handleMessages() {
-	for {
-		msg := <-broadcast
+func getRoom(roomId string) *Room {
+	roomMutex.Lock()
+	defer roomMutex.Unlock()
 
-		mutex.Lock()
-		for client := range clients {
-			if err := client.conn.WriteJSON(msg); err != nil {
-				fmt.Println("Write message fail", err)
-				client.conn.Close()
-				delete(clients, client)
-				delete(nicknames, client.nickname)
-			}
+	if _, exist := room[roomId]; exist == false {
+		room[roomId] = &Room{
+			clients:   make(map[*Client]bool),
+			broadcast: make(chan Message),
 		}
-		mutex.Unlock()
 	}
-}
-
-func sendUserList() {
-	mutex.Lock()
-	var users []string
-	for nickname := range nicknames {
-		users = append(users, nickname)
-	}
-	mutex.Unlock()
-
-	broadcast <- Message{
-		Type:     USERS,
-		UserList: users,
-	}
+	return room[roomId]
 }
 
 func main() {
-	go handleMessages()
 
-	http.HandleFunc("/ws", handleConnection)
-
+	http.HandleFunc("/wc", handleChatRoom)
 	http.Handle("/", http.FileServer(http.Dir("./html")))
-
-	fmt.Println("Run WebSocket Server")
 
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 }
