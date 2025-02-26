@@ -1,18 +1,87 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>WebSocket 채팅</title>
+    <meta charset="UTF-8">
+    <title>Go 채팅</title>
 </head>
 <body>
-<h2>채팅방</h2>
-<div id="chat-box" style="border: 1px solid black; height: 300px; overflow-y: scroll;"></div>
-<div id="user-list-box" style="border: 1px solid black; height: 100px; overflow-y: scroll;"></div>
+<h2>WebSocket 채팅</h2>
 
-<input type="text" id="message" placeholder="메시지를 입력하세요">
+<label>방 선택:</label>
+<select id="roomSelect">
+    <option value="all">전체방</option>
+</select>
+<button onclick="joinRoom()">입장</button>
+<br><br>
+
+<input type="text" id="newRoom" placeholder="새 방 이름 입력"/>
+<button onclick="createRoom()">새 방 만들기</button>
+<br><br>
+
+<input type="text" id="message" placeholder="메시지 입력"/>
 <button onclick="sendMessage()">전송</button>
+<ul id="messages"></ul>
 
 <script>
+    let socket;
+    const nickname = generateRandomString(10)
+
+    function joinRoom() {
+        const room = document.getElementById("roomSelect").value;
+        // if (socket) socket.close();
+
+        socket = new WebSocket(`ws://192.168.103.27:8080/ws`);
+        socket.onopen = () => {
+            socket.send(JSON.stringify({
+                room: room,
+                nickname: nickname
+            }))
+        }
+
+        socket.onmessage = function (event) {
+            const res = JSON.parse(event.data)
+            const msgList = document.getElementById("messages");
+            const newMsg = document.createElement("li");
+            newMsg.textContent = `${res.nickname}: ${res.text}`;
+            msgList.appendChild(newMsg);
+        };
+
+        socket.onclose = function () {
+            alert("연결 종료됨");
+        };
+    }
+
+    function sendMessage() {
+        const msg = document.getElementById("message").value;
+        socket.send(JSON.stringify({
+            text: msg,
+            nickname: nickname
+        }));
+    }
+
+    function createRoom() {
+        const newRoom = document.getElementById("newRoom").value;
+        if (newRoom.trim() === "") return alert("방 이름을 입력하세요.");
+
+        const roomSelect = document.getElementById("roomSelect");
+        const option = document.createElement("option");
+        option.value = newRoom;
+        option.textContent = newRoom;
+        roomSelect.appendChild(option);
+
+        alert(`새 방 생성됨: ${newRoom}`);
+    }
+
+    function generateRandomString(num){
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+        let result = '';
+        const charactersLength = characters.length;
+        for (let i = 0; i < num; i++) {
+            result += characters.charAt(Math.floor(Math.random() * charactersLength));
+        }
+
+        return result;
+    }
 
 </script>
 </body>

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
@@ -13,18 +14,30 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-var room = map[string]*Room{
-	"all": {
-		clients:   make(map[*Client]bool),
-		broadcast: make(chan Message),
-	},
-}
+var room = make(map[string]*ChatRoom)
 var roomMutex sync.Mutex
 
-type Room struct {
+type ChatRoom struct {
 	clients   map[*Client]bool
 	broadcast chan Message
 	mutex     sync.Mutex
+}
+
+func (room *ChatRoom) run() {
+	for msg := range room.broadcast {
+
+		room.mutex.Lock()
+		for client, _ := range room.clients {
+			select {
+			case client.send <- msg:
+				fmt.Printf("client.send [%v] msg :%v", client.room, msg)
+			default:
+				delete(room.clients, client)
+				close(client.send)
+			}
+		}
+		room.mutex.Unlock()
+	}
 }
 
 type Client struct {
@@ -34,16 +47,16 @@ type Client struct {
 }
 
 type Message struct {
-	nickname string
-	text     string
+	Nickname string `json:"nickname"`
+	Text     string `json:"text"`
 }
 
 type ConInfo struct {
-	room     string
-	nickname string
+	Room     string `json:"room"`
+	Nickname string `json:"nickname"`
 }
 
-func handleChatRoom(w http.ResponseWriter, r *http.Request) {
+func handleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("upgrader.Upgrade err:", err)
@@ -51,39 +64,47 @@ func handleChatRoom(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	var conInfo ConInfo
-	if err := conn.ReadJSON(conInfo); err != nil {
+	if err := conn.ReadJSON(&conInfo); err != nil {
 		log.Println("conn.ReadJSON err:", err)
 	}
 
 	client := &Client{
 		conn: conn,
 		send: make(chan Message),
-		room: conInfo.room,
+		room: conInfo.Room,
 	}
+	fmt.Println("ConInfo", conInfo)
+	room := getRoom(conInfo.Room)
 
-	chatRoom := getRoom(conInfo.room)
-
-	chatRoom.mutex.Lock()
-	chatRoom.clients[client] = true
-	chatRoom.mutex.Unlock()
+	room.mutex.Lock()
+	room.clients[client] = true
+	room.mutex.Unlock()
 
 	go client.writePump()
-	client.readPump(chatRoom)
+	client.readPump(room)
 
 }
 
-func (c *Client) writePump() {
-	for msg := range c.send {
-		if err := c.conn.WriteJSON(msg); err != nil {
-			log.Println("c.conn.WriteJSON err:", err)
+func getRoom(roomID string) *ChatRoom {
+	roomMutex.Lock()
+	defer roomMutex.Unlock()
+
+	if _, exist := room[roomID]; exist == false {
+		room[roomID] = &ChatRoom{
+			clients:   make(map[*Client]bool),
+			broadcast: make(chan Message),
 		}
+		go room[roomID].run()
 	}
+	return room[roomID]
 }
-func (c *Client) readPump(chatRoom *Room) {
+
+func (c *Client) readPump(room *ChatRoom) {
 	defer func() {
-		chatRoom.mutex.Lock()
-		delete(chatRoom.clients, c)
-		chatRoom.mutex.Unlock()
+		room.mutex.Lock()
+		delete(room.clients, c)
+		room.mutex.Unlock()
+		close(c.send)
 		c.conn.Close()
 	}()
 
@@ -93,27 +114,23 @@ func (c *Client) readPump(chatRoom *Room) {
 			log.Println("c.conn.ReadJSON err:", err)
 			break
 		}
-
-		chatRoom.broadcast <- msg
+		fmt.Printf("readPump [%v] msg : %v", c.room, msg)
+		room.broadcast <- msg
 	}
 }
 
-func getRoom(roomId string) *Room {
-	roomMutex.Lock()
-	defer roomMutex.Unlock()
-
-	if _, exist := room[roomId]; exist == false {
-		room[roomId] = &Room{
-			clients:   make(map[*Client]bool),
-			broadcast: make(chan Message),
+func (c *Client) writePump() {
+	for msg := range c.send {
+		fmt.Println("writePump msg", msg)
+		if err := c.conn.WriteJSON(msg); err != nil {
+			log.Println("c.conn.WriteJSON err:", err)
+			break
 		}
 	}
-	return room[roomId]
 }
 
 func main() {
-
-	http.HandleFunc("/wc", handleChatRoom)
+	http.HandleFunc("/ws", handleConnections)
 	http.Handle("/", http.FileServer(http.Dir("./html")))
 
 	err := http.ListenAndServe(":8080", nil)

@@ -21,7 +21,6 @@
     }
 
     socket.onmessage = (event) => {
-        console.log(event)
         // Message : nickname / text    구조체
         const message = JSON.parse(event.data);
 
