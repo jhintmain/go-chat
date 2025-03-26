@@ -19,31 +19,49 @@
 <br><br>
 
 <input type="text" id="message" placeholder="메시지 입력"/>
-<button onclick="sendMessage()">전송</button>
+<button onclick="sendMessage('all')">전송</button>
 <ul id="messages"></ul>
 
 <script>
-    let socket;
-    const nickname = generateRandomString(10)
+    const url = "192.168.103.47:8080"
+    const socket = new WebSocket(`ws://${url}/ws`);
+    let nickname = "";
+    let chatSocket = [];
 
-    function joinRoom() {
-        const room = document.getElementById("roomSelect").value;
-        // if (socket) socket.close();
-
-        socket = new WebSocket(`ws://192.168.103.27:8080/ws`);
+    // 채팅 페이지 접속(공통)
+    window.onload = function () {
+        nickname = generateRandomString(10);
         socket.onopen = () => {
             socket.send(JSON.stringify({
-                room: room,
-                nickname: nickname
+                'room' : "all",
+                'nickname':nickname
             }))
         }
-
+        // 방생성알림, 공통 공지, 전체 메세지
         socket.onmessage = function (event) {
             const res = JSON.parse(event.data)
+            console.log(res)
+
             const msgList = document.getElementById("messages");
             const newMsg = document.createElement("li");
-            newMsg.textContent = `${res.nickname}: ${res.text}`;
-            msgList.appendChild(newMsg);
+
+            switch (res.messageType) {
+                case 'system':
+                    newMsg.textContent = `<p>${res.nickname}: ${res.text}</p>`;
+                    msgList.appendChild(newMsg);
+                    break;
+                case 'user':
+                    newMsg.textContent = `${res.nickname}: ${res.text}`;
+                    msgList.appendChild(newMsg);
+                    break;
+                case 'room':
+                    const roomSelect = document.getElementById("roomSelect");
+                    const option = document.createElement("option");
+                    option.value = newRoom;
+                    option.textContent = newRoom;
+                    roomSelect.appendChild(option);
+                    break;
+            }
         };
 
         socket.onclose = function () {
@@ -51,35 +69,64 @@
         };
     }
 
-    function sendMessage() {
+    // 채팅방 참여야기
+    function joinRoom() {
+        const room = document.getElementById("roomSelect").value;
+
+        if(chatSocket[room]){
+            chatSocket[room].close();
+        }
+
+        chatSocket[room] = new WebSocket(`ws://${url}/ws`);
+        chatSocket[room].onopen = () => {
+            socket.send(JSON.stringify({
+                room:room,
+                nickname: nickname
+            }))
+        }
+
+        // 받는 메세지
+        chatSocket[room].onmessage = function (event) {
+            const res = JSON.parse(event.data)
+            const msgList = document.getElementById("messages");
+            const newMsg = document.createElement("li");
+            newMsg.textContent = `${res.nickname}: ${res.text}`;
+            msgList.appendChild(newMsg);
+        };
+
+        chatSocket[room].onclose = function () {
+            alert("연결 종료됨");
+        };
+    }
+
+    // 메세지 보내기
+    function sendMessage(charRoom) {
         const msg = document.getElementById("message").value;
-        socket.send(JSON.stringify({
+        charRoom.send(JSON.stringify({
             text: msg,
-            nickname: nickname
         }));
     }
 
+    // 방만들기
     function createRoom() {
         const newRoom = document.getElementById("newRoom").value;
         if (newRoom.trim() === "") return alert("방 이름을 입력하세요.");
 
-        const roomSelect = document.getElementById("roomSelect");
-        const option = document.createElement("option");
-        option.value = newRoom;
-        option.textContent = newRoom;
-        roomSelect.appendChild(option);
+        socket.send(JSON.stringify({
+            room: newRoom
+        }));
 
         alert(`새 방 생성됨: ${newRoom}`);
     }
 
-    function generateRandomString(num){
+    // 랜덤 닉네임 생성
+    function generateRandomString(num) {
         const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
         let result = '';
         const charactersLength = characters.length;
         for (let i = 0; i < num; i++) {
             result += characters.charAt(Math.floor(Math.random() * charactersLength));
         }
-
         return result;
     }
 
