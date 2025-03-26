@@ -48,7 +48,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/ws", handleWebSocket)
-	http.Handle("/", http.FileServer(http.Dir("./public")))
+	http.Handle("/", http.FileServer(http.Dir("./html")))
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		panic(err)
