@@ -20,7 +20,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// http > socket으로
+	// http > socket으로tteste
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -37,6 +37,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if room == nil {
 		http.Error(w, "room not found", http.StatusNotFound)
 		return
+	}
+
+	room.Clients = map[*server.Client]bool{
+		client: true,
 	}
 
 	defer conn.Close()

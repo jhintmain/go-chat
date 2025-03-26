@@ -36,7 +36,7 @@ func (r *Room) run() {
 var Rooms map[string]*Room
 var roomMutex sync.Mutex
 
-func GetRoom(roomID string, client *Client) *Room {
+func GetRoom(roomID string) *Room {
 	roomMutex.Lock()
 	defer roomMutex.Unlock()
 

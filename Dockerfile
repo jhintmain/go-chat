@@ -14,6 +14,8 @@ RUN go mod download
 # 코드 복사
 COPY . .
 
+RUN go build -o /app/tmp/main .
+
 # entrypoint.sh 복사
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
