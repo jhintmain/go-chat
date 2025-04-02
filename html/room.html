@@ -23,7 +23,7 @@
 <ul id="messages"></ul>
 
 <script>
-    const url = "192.168.103.47:8080"
+    const url = "192.168.103.27:8080"
     const socket = new WebSocket(`ws://${url}/ws`);
     let nickname = "";
     let chatSocket = [];
@@ -33,7 +33,7 @@
         nickname = generateRandomString(10);
         socket.onopen = () => {
             socket.send(JSON.stringify({
-                'room' : "all",
+                'room' : "ALL",
                 'nickname':nickname
             }))
         }
@@ -103,7 +103,7 @@
     function sendMessage(charRoom) {
         const msg = document.getElementById("message").value;
         charRoom.send(JSON.stringify({
-            text: msg,
+            content: msg,
         }));
     }
 
@@ -113,7 +113,8 @@
         if (newRoom.trim() === "") return alert("방 이름을 입력하세요.");
 
         socket.send(JSON.stringify({
-            room: newRoom
+            room: newRoom,
+            nickname : nickname
         }));
 
         alert(`새 방 생성됨: ${newRoom}`);
