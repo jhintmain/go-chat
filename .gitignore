@@ -1,2 +1,5 @@
 /tmp
 /log
+/.idea/vcs.xml
+/.idea/modules.xml
+/.idea/go-chat.iml
