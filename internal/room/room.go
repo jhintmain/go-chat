@@ -1,56 +1,69 @@
+// internal/room/room.go
 package room
 
 import (
-	internalClient "go-chat/internal/client"
 	"go-chat/internal/dto"
+	"go-chat/internal/port"
 	"sync"
-)
-
-var (
-	RoomList = make(map[string]*Room)
-	mtx      sync.Mutex
 )
 
 type Room struct {
 	ID        string
-	Clients   map[string]*internalClient.Client
+	Clients   map[string]port.Client
 	Broadcast chan dto.Message
 	Mutex     *sync.Mutex
 }
 
-func NewRoom(roomID string) *Room {
-	mtx.Lock()
-	defer mtx.Unlock()
+type RoomManager struct {
+	Rooms map[string]*Room
+	Mutex *sync.Mutex
+}
 
+func NewRoomManager() *RoomManager {
+	return &RoomManager{
+		Rooms: make(map[string]*Room),
+		Mutex: &sync.Mutex{},
+	}
+}
+
+func (rm *RoomManager) GetRoom(roomID string) *Room {
+	rm.Mutex.Lock()
+	defer rm.Mutex.Unlock()
+
+	if room, exists := rm.Rooms[roomID]; exists {
+		return room
+	}
 	room := &Room{
 		ID:        roomID,
-		Clients:   make(map[string]*internalClient.Client),
+		Clients:   make(map[string]port.Client),
 		Broadcast: make(chan dto.Message),
 		Mutex:     &sync.Mutex{},
 	}
-	RoomList[room.ID] = room
+	rm.Rooms[roomID] = room
 	go room.run()
 	return room
-}
-
-func GetRoom(roomID string) *Room {
-	if _, exist := RoomList[roomID]; exist == false {
-		return NewRoom(roomID)
-	}
-	return RoomList[roomID]
 }
 
 func (r *Room) run() {
 	for msg := range r.Broadcast {
 		r.Mutex.Lock()
 		for uuid, client := range r.Clients {
-			select {
-			case client.Send <- msg:
-			default:
-				close(client.Send)
+			if err := client.SendMessage(msg); err != nil {
+				client.Close()
 				delete(r.Clients, uuid)
 			}
 		}
 		r.Mutex.Unlock()
 	}
+}
+
+func (r *Room) Join(c port.Client) {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+	r.Clients[c.ID()] = c
+}
+
+func (rm *RoomManager) HandleMessage(msg dto.Message) {
+	r := rm.GetRoom(msg.RoomID)
+	r.Broadcast <- msg
 }

@@ -1,8 +1,8 @@
 package dto
 
 type Message struct {
-	Div     string      `json:"div"` // CHAT, SYSTEM, ROOMLIST, USERLIST
-	RoomId  string      `json:"roomID"`
-	Content string      `json:"content"`
-	Data    interface{} `json:"data"`
+	Div    string      `json:"div"` // CHAT, SYSTEM, ROOMLIST, USERLIST
+	RoomID string      `json:"roomID"`
+	Text   string      `json:"text"`
+	Data   interface{} `json:"data"`
 }

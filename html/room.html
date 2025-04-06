@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <title>Go 채팅</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=" crossorigin="anonymous" defer></script>
 </head>
 <body>
-<h2>WebSocket 채팅</h2>
+<h2>WebSocket 채팅??</h2>
 
 <label>방 선택:</label>
-<select id="roomSelect">
-    <option value="all">전체방</option>
-</select>
+<!--<select id="roomSelect">-->
+<!--    <option value="all">전체방</option>-->
+<!--</select>-->
+<input type="text" id="joinRoomID" placeholder="입장할 방 입력"/>
 <button onclick="joinRoom()">입장</button>
 <br><br>
 
-<input type="text" id="newRoom" placeholder="새 방 이름 입력"/>
+<input type="text" id="creatRoomID" placeholder="새 방 이름 입력"/>
 <button onclick="createRoom()">새 방 만들기</button>
 <br><br>
 
@@ -23,44 +25,29 @@
 <ul id="messages"></ul>
 
 <script>
-    const url = "192.168.103.27:8080"
-    const socket = new WebSocket(`ws://${url}/ws`);
+    const url = "localhost:8080"
+    const httpUrl = "http://"+url
+    let socket = '';
     let nickname = "";
-    let chatSocket = [];
 
     // 채팅 페이지 접속(공통)
     window.onload = function () {
         nickname = generateRandomString(10);
+        // URL에 nickname 포함
+        socket = new WebSocket(`ws://${url}/ws?nickname=${nickname}`);
+
         socket.onopen = () => {
-            socket.send(JSON.stringify({
-                'room' : "ALL",
-                'nickname':nickname
-            }))
+            console.log("WebSocket connected");
         }
         // 방생성알림, 공통 공지, 전체 메세지
         socket.onmessage = function (event) {
             const res = JSON.parse(event.data)
             console.log(res)
 
-            const msgList = document.getElementById("messages");
-            const newMsg = document.createElement("li");
-
-            switch (res.messageType) {
-                case 'system':
-                    newMsg.textContent = `<p>${res.nickname}: ${res.text}</p>`;
-                    msgList.appendChild(newMsg);
-                    break;
-                case 'user':
-                    newMsg.textContent = `${res.nickname}: ${res.text}`;
-                    msgList.appendChild(newMsg);
-                    break;
-                case 'room':
-                    const roomSelect = document.getElementById("roomSelect");
-                    const option = document.createElement("option");
-                    option.value = newRoom;
-                    option.textContent = newRoom;
-                    roomSelect.appendChild(option);
-                    break;
+            if (res.div === "UUID"){
+                localStorage.setItem("clientID",res.text)
+                localStorage.setItem("nickname",nickname)
+                console.log('set')
             }
         };
 
@@ -69,55 +56,56 @@
         };
     }
 
-    // 채팅방 참여야기
-    function joinRoom() {
-        const room = document.getElementById("roomSelect").value;
 
-        if(chatSocket[room]){
-            chatSocket[room].close();
-        }
-
-        chatSocket[room] = new WebSocket(`ws://${url}/ws`);
-        chatSocket[room].onopen = () => {
-            socket.send(JSON.stringify({
-                room:room,
-                nickname: nickname
-            }))
-        }
-
-        // 받는 메세지
-        chatSocket[room].onmessage = function (event) {
-            const res = JSON.parse(event.data)
-            const msgList = document.getElementById("messages");
-            const newMsg = document.createElement("li");
-            newMsg.textContent = `${res.nickname}: ${res.text}`;
-            msgList.appendChild(newMsg);
-        };
-
-        chatSocket[room].onclose = function () {
-            alert("연결 종료됨");
-        };
-    }
 
     // 메세지 보내기
-    function sendMessage(charRoom) {
+    function sendMessage(roomID) {
         const msg = document.getElementById("message").value;
-        charRoom.send(JSON.stringify({
-            content: msg,
+        socket.send(JSON.stringify({
+            div:"CHAT",
+            roomID : roomID,
+            text: msg,
         }));
     }
 
     // 방만들기
     function createRoom() {
-        const newRoom = document.getElementById("newRoom").value;
-        if (newRoom.trim() === "") return alert("방 이름을 입력하세요.");
+        const roomID = document.getElementById("creatRoomID").value;
+        if (!roomID) return alert("방 이름을 입력하세요.");
 
-        socket.send(JSON.stringify({
-            room: newRoom,
-            nickname : nickname
-        }));
+        $.ajax({
+            url: `${httpUrl}/join?roomID=${roomID}`,       // 요청할 URL
+            type: 'POST',            // HTTP 메서드
+            headers: {
+                "X-Client-UUID": localStorage.getItem("clientID") // UUID를 헤더에 포함
+            },
+            success: function (res) {
+                console.log(res)
+            },
+            error: function (xhr, status, error) {
+                alert('에러 발생: ' + error);
+            }
+        });
 
-        alert(`새 방 생성됨: ${newRoom}`);
+        alert(`새 방 생성됨: ${roomID}`);
+    }
+
+    function joinRoom() {
+        const roomID = document.getElementById("joinRoomID").value;
+        if (!roomID) return alert("방 이름을 입력하세요.");
+        $.ajax({
+            url: `${httpUrl}/join?roomID=${roomID}`,       // 요청할 URL
+            type: 'POST',            // HTTP 메서드
+            headers: {
+                "X-Client-UUID": localStorage.getItem("clientID") // UUID를 헤더에 포함
+            },
+            success: function (res) {
+                console.log(res)
+            },
+            error: function (xhr, status, error) {
+                alert('에러 발생: ' + error);
+            }
+        });
     }
 
     // 랜덤 닉네임 생성
@@ -128,6 +116,7 @@
         for (let i = 0; i < num; i++) {
             result += characters.charAt(Math.floor(Math.random() * charactersLength));
         }
+        // return "코무지"
         return result;
     }
 

@@ -4,46 +4,74 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go-chat/internal/dto"
-	"log"
+	"go-chat/internal/port"
 	"sync"
 )
 
-var ClientList map[string]*Client
-
-type Client struct {
-	UUID     string
-	Conn     *websocket.Conn
-	Send     chan dto.Message
-	NickName string
-	Mutex    *sync.Mutex
+type ChatClient struct {
+	uuid     string
+	nickname string
+	conn     *websocket.Conn
+	send     chan dto.Message
+	rooms    map[string]bool
+	mutex    sync.Mutex
 }
 
-func NewClient(conn *websocket.Conn, nickname string) Client {
-	client := Client{
-		UUID:     uuid.NewString(),
-		Conn:     conn,
-		Send:     make(chan dto.Message),
-		NickName: nickname,
-		Mutex:    &sync.Mutex{},
-	}
-	ClientList[client.UUID] = &client
-	return client
+func (c *ChatClient) ID() string {
+	return c.uuid
 }
 
-func (c *Client) write() {
-	for msg := range c.Send {
-		if err := c.Conn.WriteJSON(&msg); err != nil {
-			break
-		}
+func (c *ChatClient) SendMessage(msg dto.Message) error {
+	c.send <- msg
+	return nil
+}
+
+func (c *ChatClient) Close() {
+	c.conn.Close()
+}
+
+func (c *ChatClient) Write() {
+	for msg := range c.send {
+		c.conn.WriteJSON(msg)
 	}
 }
-func (c *Client) read() {
+
+func (c *ChatClient) Read(rm port.RoomService) {
 	for {
 		var msg dto.Message
-		if err := c.Conn.ReadJSON(&msg); err != nil {
-			log.Println("c.conn.ReadMessage err:", err)
+		if err := c.conn.ReadJSON(&msg); err != nil {
 			break
 		}
-		// todo : broadcase
+		rm.HandleMessage(msg)
 	}
+}
+
+// client manager
+var clients = make(map[string]*ChatClient)
+var mtx sync.Mutex
+
+func NewClientManager() *ClientManager {
+	return &ClientManager{}
+}
+
+type ClientManager struct{}
+
+func (cm *ClientManager) CreateClient(conn *websocket.Conn, nickname string) *ChatClient {
+	c := &ChatClient{
+		uuid:     uuid.NewString(),
+		nickname: nickname,
+		conn:     conn,
+		send:     make(chan dto.Message),
+		rooms:    make(map[string]bool),
+	}
+	mtx.Lock()
+	clients[c.uuid] = c
+	mtx.Unlock()
+	return c
+}
+
+func (cm *ClientManager) Get(uuid string) *ChatClient {
+	mtx.Lock()
+	defer mtx.Unlock()
+	return clients[uuid]
 }
