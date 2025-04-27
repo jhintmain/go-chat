@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/gorilla/websocket"
 	pkgClient "go-chat/internal/client"
 	"go-chat/internal/dto"
@@ -20,7 +21,6 @@ var roomManager = pkgRoom.NewRoomManager()
 var clientManager = pkgClient.NewClientManager()
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// http > socket으로
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -28,13 +28,13 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	nickname := r.URL.Query().Get("nickname")
-	c := clientManager.CreateClient(conn, nickname)
-	go c.Write()
-	go c.Read(roomManager)
+	client := clientManager.CreateClient(conn, nickname)
+	go client.Write()
+	go client.Read(roomManager)
 
-	_ = c.SendMessage(dto.Message{
+	_ = client.SendMessage(dto.Message{
 		Div:  "UUID",
-		Text: c.ID(), // 또는 UUID 전용 필드 추가
+		Text: client.ID(), // 또는 UUID 전용 필드 추가
 	})
 }
 
@@ -42,20 +42,36 @@ func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 	clientUUID := r.Header.Get("X-Client-UUID")
 	roomID := r.URL.Query().Get("roomID")
 
-	c := clientManager.Get(clientUUID)
-	if c == nil {
+	client := clientManager.Get(clientUUID)
+	if client == nil {
 		http.Error(w, "client not found", http.StatusBadRequest)
 		return
 	}
 
-	room := roomManager.GetRoom(roomID)
-	room.Join(c)
+	isNewRoom, room := roomManager.GetRoom(roomID)
+	room.Join(client)
 	log.Println(room.ID, room.Clients)
+
+	room.Broadcast <- dto.Message{
+		Div:    "CHAT",
+		RoomID: roomID,
+		Text:   fmt.Sprintf("[%s] 님 입장", client.Nickname()),
+	}
+
+	if isNewRoom {
+		// 모든 클라이언트에게 발송
+		pkgClient.AnnounceAllClient(dto.Message{
+			Div:    "CREATE_ROOM",
+			RoomID: roomID,
+		})
+		pkgResponse.Success(w, "created room")
+		return
+	}
+
 	pkgResponse.Success(w, "joined room")
 }
 
 func main() {
-	// asdfasdf
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/join", handleJoinRoom)
 	http.Handle("/", http.FileServer(http.Dir("./html")))

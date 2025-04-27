@@ -20,6 +20,9 @@ type ChatClient struct {
 func (c *ChatClient) ID() string {
 	return c.uuid
 }
+func (c *ChatClient) Nickname() string {
+	return c.nickname
+}
 
 func (c *ChatClient) SendMessage(msg dto.Message) error {
 	c.send <- msg
@@ -42,6 +45,7 @@ func (c *ChatClient) Read(rm port.RoomService) {
 		if err := c.conn.ReadJSON(&msg); err != nil {
 			break
 		}
+		msg.Text = c.nickname + ": " + msg.Text
 		rm.HandleMessage(msg)
 	}
 }
@@ -74,4 +78,10 @@ func (cm *ClientManager) Get(uuid string) *ChatClient {
 	mtx.Lock()
 	defer mtx.Unlock()
 	return clients[uuid]
+}
+
+func AnnounceAllClient(message dto.Message) {
+	for _, client := range clients {
+		_ = client.SendMessage(message)
+	}
 }

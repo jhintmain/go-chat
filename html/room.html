@@ -3,52 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <title>Go 채팅</title>
-    <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=" crossorigin="anonymous" defer></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=" crossorigin="anonymous"></script>
 </head>
 <body>
-<h2>WebSocket 채팅??</h2>
+<h2>WebSocket 채팅</h2>
 
 <label>방 선택:</label>
-<!--<select id="roomSelect">-->
-<!--    <option value="all">전체방</option>-->
-<!--</select>-->
-<input type="text" id="joinRoomID" placeholder="입장할 방 입력"/>
-<button onclick="joinRoom()">입장</button>
+<select id="roomSelect">
+    <option value="">방선택</option>
+    <option value="all">전체방</option>
+</select>
 <br><br>
 
-<input type="text" id="creatRoomID" placeholder="새 방 이름 입력"/>
+<input type="text" id="creatRoomID" placeholder="새 방 이름 입력" onkeypress="(event.keyCode == 13) ? createRoom() : false"/>
 <button onclick="createRoom()">새 방 만들기</button>
 <br><br>
-
-<input type="text" id="message" placeholder="메시지 입력"/>
-<button onclick="sendMessage('all')">전송</button>
-<ul id="messages"></ul>
+<div id="chat-boxs"></div>
 
 <script>
-    const url = "localhost:8080"
+    // const url = "localhost:8080"
+    const url = "172.30.1.89:8080"
     const httpUrl = "http://"+url
     let socket = '';
     let nickname = "";
 
+
+    $('#roomSelect').on('change', function() {
+        let roomID = $(this).val();
+        if(roomID === "")return
+        joinRoom(roomID)
+    });
+
+    $("#chat-boxs").on('keypress', 'input' ,function (e) {
+        const roomID= $(this).data("room-id")
+        if (e.keyCode === 13){
+            sendMessage(roomID);
+        }
+    })
+
+    function makeChatBox(roomID){
+        const roomChatDiv = $(`#chat-box-${roomID}`)
+        if (roomChatDiv.length > 0){
+           return
+        }
+        $("#chat-boxs").append(`<div id="chat-box-${roomID}">${roomID} 방
+                                    <input type="text" id="chat-box-${roomID}-message" placeholder="메시지 입력" data-room-id="${roomID}"/>
+                                    <button onclick="sendMessage('${roomID}')">전송</button>
+                                </div><hr>`);
+    }
     // 채팅 페이지 접속(공통)
     window.onload = function () {
-        nickname = generateRandomString(10);
+        // nickname = generateRandomString(10);
+
+        nickname = prompt("닉네임을 입력하세오:")
         // URL에 nickname 포함
         socket = new WebSocket(`ws://${url}/ws?nickname=${nickname}`);
 
-        socket.onopen = () => {
+        socket.onopen = () =>{
             console.log("WebSocket connected");
         }
+
         // 방생성알림, 공통 공지, 전체 메세지
         socket.onmessage = function (event) {
             const res = JSON.parse(event.data)
             console.log(res)
+            const roomID = res.roomID
 
-            if (res.div === "UUID"){
-                localStorage.setItem("clientID",res.text)
-                localStorage.setItem("nickname",nickname)
-                console.log('set')
+            switch (res.div) {
+                case "UUID":
+                    localStorage.setItem("clientID", res.text)
+                    localStorage.setItem("nickname", nickname)
+                    break;
+                case "CHAT" :
+                    makeChatBox(roomID)
+                    const roomChatDiv = $(`#chat-box-${roomID}`)
+                    roomChatDiv.append(`<p>${res.text}</p>`)
+                    break;
+                case "CREATE_ROOM":
+                    $('#roomSelect').append(`<option value='${roomID}'>${roomID}</option>`)
+                    break;
             }
+
         };
 
         socket.onclose = function () {
@@ -56,21 +91,22 @@
         };
     }
 
-
-
     // 메세지 보내기
     function sendMessage(roomID) {
-        const msg = document.getElementById("message").value;
+        const $this = $(`#chat-box-${roomID}-message`)
+        const msg = $this.val()
         socket.send(JSON.stringify({
             div:"CHAT",
             roomID : roomID,
             text: msg,
         }));
+        $this.val('')
     }
 
     // 방만들기
     function createRoom() {
-        const roomID = document.getElementById("creatRoomID").value;
+        const $this = $("#creatRoomID")
+        const roomID = $this.val()
         if (!roomID) return alert("방 이름을 입력하세요.");
 
         $.ajax({
@@ -81,6 +117,10 @@
             },
             success: function (res) {
                 console.log(res)
+                // $('#roomSelect').append(`<option value='${roomID}'>${roomID}</option>`)
+                joinRoom(roomID)
+                $this.val('');
+
             },
             error: function (xhr, status, error) {
                 alert('에러 발생: ' + error);
@@ -90,8 +130,7 @@
         alert(`새 방 생성됨: ${roomID}`);
     }
 
-    function joinRoom() {
-        const roomID = document.getElementById("joinRoomID").value;
+    function joinRoom(roomID) {
         if (!roomID) return alert("방 이름을 입력하세요.");
         $.ajax({
             url: `${httpUrl}/join?roomID=${roomID}`,       // 요청할 URL
@@ -101,6 +140,7 @@
             },
             success: function (res) {
                 console.log(res)
+                makeChatBox(roomID)
             },
             error: function (xhr, status, error) {
                 alert('에러 발생: ' + error);

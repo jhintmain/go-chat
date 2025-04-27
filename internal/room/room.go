@@ -4,6 +4,7 @@ package room
 import (
 	"go-chat/internal/dto"
 	"go-chat/internal/port"
+	"log"
 	"sync"
 )
 
@@ -26,14 +27,15 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
-func (rm *RoomManager) GetRoom(roomID string) *Room {
+func (rm *RoomManager) GetRoom(roomID string) (isNewRoom bool, room *Room) {
 	rm.Mutex.Lock()
 	defer rm.Mutex.Unlock()
 
 	if room, exists := rm.Rooms[roomID]; exists {
-		return room
+		return false, room
 	}
-	room := &Room{
+	isNewRoom = true
+	room = &Room{
 		ID:        roomID,
 		Clients:   make(map[string]port.Client),
 		Broadcast: make(chan dto.Message),
@@ -41,13 +43,14 @@ func (rm *RoomManager) GetRoom(roomID string) *Room {
 	}
 	rm.Rooms[roomID] = room
 	go room.run()
-	return room
+	return isNewRoom, room
 }
 
 func (r *Room) run() {
 	for msg := range r.Broadcast {
 		r.Mutex.Lock()
 		for uuid, client := range r.Clients {
+			log.Println(uuid)
 			if err := client.SendMessage(msg); err != nil {
 				client.Close()
 				delete(r.Clients, uuid)
@@ -64,6 +67,6 @@ func (r *Room) Join(c port.Client) {
 }
 
 func (rm *RoomManager) HandleMessage(msg dto.Message) {
-	r := rm.GetRoom(msg.RoomID)
-	r.Broadcast <- msg
+	_, room := rm.GetRoom(msg.RoomID)
+	room.Broadcast <- msg
 }
