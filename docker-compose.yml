@@ -6,10 +6,24 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8080:8080"
+      - "1324:1324"
     networks:
       - app-network
 
+  redis:
+    image: redis:latest     # Redis 최신 버전 이미지 사용
+    container_name: redis   # 컨테이너 이름 설정
+    restart: always
+    ports:
+      - "6379:6379"         # Redis 기본 포트 6379를 호스트와 연결
+    volumes:
+      - redis-data:/data    # Redis 데이터 저장소를 볼륨으로 연결
+    networks:
+      - app-network         # go-chat와 같은 네트워크로 설정
+
+volumes:
+  redis-data:             # Redis 데이터를 저장할 볼륨
+
 networks:
-  app-network:
-    driver: bridge
+  app-network:            # go-chat과 redis가 같은 네트워크를 사용할 수 있도록 설정
+    driver: bridge         # 기본 브리지 네트워크 사용

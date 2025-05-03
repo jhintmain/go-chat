@@ -14,14 +14,8 @@ RUN go mod download
 # 코드 복사
 COPY . .
 
-RUN go build -o /app/tmp/main .
-
-# entrypoint.sh 복사
-COPY entrypoint.sh /entrypoint.sh
+COPY ./entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # 컨테이너 실행 시 entrypoint.sh 실행
 ENTRYPOINT ["/entrypoint.sh"]
-
-# 기본 실행 명령 (air 사용)
-CMD ["air", "-c", ".air.toml"]

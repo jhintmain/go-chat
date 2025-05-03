@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"go-chat/internal/dto"
 	"go-chat/internal/port"
+	"log"
 	"sync"
 )
 
@@ -20,6 +21,7 @@ type ChatClient struct {
 func (c *ChatClient) ID() string {
 	return c.uuid
 }
+
 func (c *ChatClient) Nickname() string {
 	return c.nickname
 }
@@ -70,6 +72,7 @@ func (cm *ClientManager) CreateClient(conn *websocket.Conn, nickname string) *Ch
 	}
 	mtx.Lock()
 	clients[c.uuid] = c
+	log.Println("create clients", clients)
 	mtx.Unlock()
 	return c
 }

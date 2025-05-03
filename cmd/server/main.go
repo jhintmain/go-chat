@@ -7,6 +7,7 @@ import (
 	"go-chat/internal/dto"
 	pkgResponse "go-chat/internal/response"
 	pkgRoom "go-chat/internal/room"
+	"go-chat/internal/storage"
 	"log"
 	"net/http"
 )
@@ -28,20 +29,24 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	nickname := r.URL.Query().Get("nickname")
-	client := clientManager.CreateClient(conn, nickname)
-	go client.Write()
-	go client.Read(roomManager)
 
-	_ = client.SendMessage(dto.Message{
-		Div:  "UUID",
-		Text: client.ID(), // 또는 UUID 전용 필드 추가
-	})
+	if nickname != "" {
+		client := clientManager.CreateClient(conn, nickname)
+		go client.Write()
+		go client.Read(roomManager)
+
+		_ = client.SendMessage(dto.Message{
+			Div:  "UUID",
+			Text: client.ID(), // 또는 UUID 전용 필드 추가
+		})
+	}
 }
 
 func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 	clientUUID := r.Header.Get("X-Client-UUID")
 	roomID := r.URL.Query().Get("roomID")
 
+	log.Println("clientUUID", clientUUID)
 	client := clientManager.Get(clientUUID)
 	if client == nil {
 		http.Error(w, "client not found", http.StatusBadRequest)
@@ -50,7 +55,6 @@ func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 
 	isNewRoom, room := roomManager.GetRoom(roomID)
 	room.Join(client)
-	log.Println(room.ID, room.Clients)
 
 	room.Broadcast <- dto.Message{
 		Div:    "CHAT",
@@ -71,12 +75,21 @@ func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 	pkgResponse.Success(w, "joined room")
 }
 
+func handleRoomList(w http.ResponseWriter, r *http.Request) {
+	roomList := roomManager.GetRoomList()
+	pkgResponse.Success(w, roomList)
+}
+
 func main() {
+	storage.InitRedis()
+
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/join", handleJoinRoom)
+	http.HandleFunc("/rooms", handleRoomList)
 	http.Handle("/", http.FileServer(http.Dir("./html")))
 
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	defer storage.CloseRedis()
+	if err := http.ListenAndServe(":1324", nil); err != nil {
 		panic(err)
 	}
 }

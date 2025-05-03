@@ -27,6 +27,13 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
+func (rm *RoomManager) GetRoomList() (roomList []string) {
+	for roomID, _ := range rm.Rooms {
+		roomList = append(roomList, roomID)
+	}
+	return roomList
+}
+
 func (rm *RoomManager) GetRoom(roomID string) (isNewRoom bool, room *Room) {
 	rm.Mutex.Lock()
 	defer rm.Mutex.Unlock()

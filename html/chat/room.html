@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>간단한 채팅창</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=" crossorigin="anonymous"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .chat-container {
+            width: 400px;
+            height: 600px;
+            background-color: white;
+            border: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            background-color: #4a90e2;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-size: 18px;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            border-top: 1px solid #ddd;
+            border-bottom: 1px solid #ddd;
+        }
+        .chat-input {
+            display: flex;
+            padding: 10px;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .chat-input button {
+            margin-left: 10px;
+            padding: 8px 12px;
+            border: none;
+            background-color: #4a90e2;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div class="chat-container">
+    <div class="chat-header">채팅창</div>
+    <div class="chat-messages">
+        <!-- 메시지가 여기에 표시됩니다 -->
+<!--        <p><strong>사용자1:</strong> 안녕하세요!</p>-->
+<!--        <p><strong>사용자2:</strong> 반가워요 😊</p>-->
+    </div>
+    <div class="chat-input">
+        <input type="text" placeholder="메시지를 입력하세요..." id="message-input">
+        <button>전송</button>
+    </div>
+</div>
+<script>
+    const url = "192.168.103.32:1324"
+    const httpUrl = "http://"+url
+    let socket = '';
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomID = urlParams.get('roomID');
+    $.ajaxSetup({
+            headers: {
+                "X-Client-UUID": localStorage.getItem("clientID")
+            }
+        })
+
+    window.onload = function () {
+        console.log(roomID)
+        console.log(localStorage.getItem("clientID"))
+        socket = new WebSocket(`ws://${url}/ws`);
+
+
+        socket.onopen = () =>{
+            console.log("WebSocket connected");
+        }
+
+        // 공통 공지, 전체 메세지
+        socket.onmessage = function (event) {
+            const res = JSON.parse(event.data)
+
+            switch (res.div) {
+                case "CHAT" :
+                    const roomChatDiv = $(`.chat-messages`)
+                    roomChatDiv.append(`<p><strong>사용자1:</strong> ${res.text}</p>`)
+                    break;
+            }
+        };
+
+        socket.onclose = function () {
+            alert("연결 종료됨");
+        };
+    }
+
+    // 메세지 보내기
+    function sendMessage() {
+        const $this = $(`#message-input`)
+        const msg = $this.val()
+        socket.send(JSON.stringify({
+            div:"CHAT",
+            roomID : roomID,
+            text: msg,
+        }));
+        $this.val('')
+    }
+
+</script>
+</body>
+</html>
