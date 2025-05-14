@@ -19,24 +19,16 @@
 <br><br>
 <div id="chat-boxs"></div>
 
+<script src="/js/common.js" type="application/javascript"></script>
 <script>
-    $.ajaxSetup({
-        headers: {
-            "X-Client-UUID": localStorage.getItem("clientID")
-        }
-    })
-
-    // const url = "localhost:8080"
-    const url = "192.168.103.32:1324"
-    const httpUrl = "http://"+url
-    let socket = '';
-    let nickname = "";
+    let socket = "";
+    let clientID = "";
 
     // 방 선택
     $('#roomSelect').on('change', function() {
         let roomID = $(this).val();
         if(roomID === "")return
-        joinRoom(roomID)
+        window.open(`${SERVER_URL}/html/chat/room.html?roomID=${roomID}`, "_blank", "width=600, height=600");
     });
 
     // 채팅란 입력후 엔터시 submit
@@ -61,13 +53,11 @@
 
     // 채팅 페이지 접속(공통)
     window.onload = function () {
-        nickname = prompt("닉네임을 입력하세오:")
-        socket = new WebSocket(`ws://${url}/ws?nickname=${nickname}`);
-
+        const nickname = prompt("닉네임을 입력하세오:")
+        socket = new WebSocket(`ws://${SERVER_DOMAIN}/ws?nickname=${nickname}`);
 
         socket.onopen = () =>{
             console.log("WebSocket connected");
-
             // 방 목록 가져오기
             getRoomList();
         }
@@ -79,8 +69,13 @@
 
             switch (res.div) {
                 case "UUID":
-                    localStorage.setItem("clientID", res.text)
+                    clientID = res.text
                     localStorage.setItem("nickname", nickname)
+                    $.ajaxSetup({
+                        headers: {
+                            "X-Client-UUID":clientID
+                        }
+                    })
                     break;
                 case "CHAT" :
                     makeChatBox(roomID)
@@ -114,28 +109,12 @@
         if (!roomID) return alert("방 이름을 입력하세요.");
 
         $.ajax({
-            url: `${httpUrl}/join?roomID=${roomID}`,       // 요청할 URL
+            url: `${SERVER_URL}/join?roomID=${roomID}`,       // 요청할 URL
             type: 'POST',            // HTTP 메서드
             success: function (res) {
                 console.log(res)
                 $this.val('');
                 getRoomList();  // 방 목록 refresh
-                window.open(`${httpUrl}/chat/room.html?roomID=${roomID}`, "_blank");
-            },
-            error: function (xhr, status, error) {
-                alert('에러 발생: ' + error);
-            }
-        });
-    }
-
-    function joinRoom(roomID) {
-        if (!roomID) return alert("방 이름을 입력하세요.");
-        $.ajax({
-            url: `${httpUrl}/join?roomID=${roomID}`,       // 요청할 URL
-            type: 'POST',            // HTTP 메서드
-            success: function (res) {
-                console.log(res)
-                makeChatBox(roomID)
             },
             error: function (xhr, status, error) {
                 alert('에러 발생: ' + error);
@@ -146,7 +125,7 @@
     // 방 list
     function getRoomList(){
         $.ajax({
-            url: `${httpUrl}/rooms`,       // 요청할 URL
+            url: `${SERVER_URL}/rooms`,       // 요청할 URL
             type: 'GET',            // HTTP 메서드
             success: function (res) {
                 console.log(res)

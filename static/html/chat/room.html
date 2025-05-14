@@ -67,26 +67,20 @@
     </div>
     <div class="chat-input">
         <input type="text" placeholder="메시지를 입력하세요..." id="message-input">
-        <button>전송</button>
+        <button onclick="sendMessage()">전송</button>
     </div>
 </div>
+<script src="/js/common.js" type="application/javascript"></script>
 <script>
-    const url = "192.168.103.32:1324"
-    const httpUrl = "http://"+url
-    let socket = '';
     const urlParams = new URLSearchParams(window.location.search);
     const roomID = urlParams.get('roomID');
-    $.ajaxSetup({
-            headers: {
-                "X-Client-UUID": localStorage.getItem("clientID")
-            }
-        })
+    const nickname = localStorage.getItem("nickname")
+
+    let socket = '';
+    let clientID = "";
 
     window.onload = function () {
-        console.log(roomID)
-        console.log(localStorage.getItem("clientID"))
-        socket = new WebSocket(`ws://${url}/ws`);
-
+        socket = new WebSocket(`ws://${SERVER_DOMAIN}/ws?nickname=${nickname}`);
 
         socket.onopen = () =>{
             console.log("WebSocket connected");
@@ -95,32 +89,64 @@
         // 공통 공지, 전체 메세지
         socket.onmessage = function (event) {
             const res = JSON.parse(event.data)
+            // 
 
             switch (res.div) {
+                case "UUID":
+                    clientID = res.text;
+                    console.log(clientID)
+                    $.ajaxSetup({
+                        headers: {
+                            "X-Client-UUID": clientID,
+                        }
+                    })
+                    joinRoom(roomID);
+                    break;
                 case "CHAT" :
                     const roomChatDiv = $(`.chat-messages`)
-                    roomChatDiv.append(`<p><strong>사용자1:</strong> ${res.text}</p>`)
+                    roomChatDiv.append(`<p><strong>${res.nickname}:</strong> ${res.text}</p>`)
+                    console.log(res.text)
                     break;
             }
         };
 
         socket.onclose = function () {
             alert("연결 종료됨");
-        };
+        }
     }
 
+    $("#message-input").on("keydown", function(e) {
+        if(e.keyCode === 13) {
+            sendMessage();
+        }
+    });
+
+    function joinRoom(roomID) {
+        console.log(roomID)
+
+        $.ajax({
+            url: `${SERVER_URL}/join?roomID=${roomID}`,       // 요청할 URL
+            type: 'POST',            // HTTP 메서드
+            success: function (res) {
+                console.log(res)
+            },
+            error: function (xhr, status, error) {
+                alert('에러 발생: ' + error);
+            }
+        });
+    }
     // 메세지 보내기
     function sendMessage() {
         const $this = $(`#message-input`)
         const msg = $this.val()
         socket.send(JSON.stringify({
             div:"CHAT",
+            nickname: nickname,
             roomID : roomID,
             text: msg,
         }));
         $this.val('')
     }
-
 </script>
 </body>
 </html>

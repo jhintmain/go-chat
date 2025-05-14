@@ -27,6 +27,7 @@ func (c *ChatClient) Nickname() string {
 }
 
 func (c *ChatClient) SendMessage(msg dto.Message) error {
+	msg.Nickname = c.nickname
 	c.send <- msg
 	return nil
 }
@@ -47,7 +48,6 @@ func (c *ChatClient) Read(rm port.RoomService) {
 		if err := c.conn.ReadJSON(&msg); err != nil {
 			break
 		}
-		msg.Text = c.nickname + ": " + msg.Text
 		rm.HandleMessage(msg)
 	}
 }
@@ -72,6 +72,7 @@ func (cm *ClientManager) CreateClient(conn *websocket.Conn, nickname string) *Ch
 	}
 	mtx.Lock()
 	clients[c.uuid] = c
+	log.Println("create client", c)
 	log.Println("create clients", clients)
 	mtx.Unlock()
 	return c

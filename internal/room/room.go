@@ -4,7 +4,6 @@ package room
 import (
 	"go-chat/internal/dto"
 	"go-chat/internal/port"
-	"log"
 	"sync"
 )
 
@@ -57,7 +56,6 @@ func (r *Room) run() {
 	for msg := range r.Broadcast {
 		r.Mutex.Lock()
 		for uuid, client := range r.Clients {
-			log.Println(uuid)
 			if err := client.SendMessage(msg); err != nil {
 				client.Close()
 				delete(r.Clients, uuid)
